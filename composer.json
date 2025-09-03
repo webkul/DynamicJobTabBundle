@@ -1,15 +1,9 @@
 {
-  "name": "navneetbhardwaj/akeneodynamicjobtab",
+  "name": "webkul/akeneodynamicjobtab",
   "type": "symfony-bundle",
   "description": "Dynamic Job Tab Bundle: Seamlessly add custom tabs to any job with the Dynamic Job Tab Bundle. This versatile tool allows you to dynamically integrate a custom tab into your job listings. To configure the job name, simply update the configuration.yml file.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "OSL-3.0",
-  "authors": [
-    {
-      "name": "Navneet Kumar",
-      "homepage": "https://www.navneetkumar.info"
-    }
-  ],
   "require": {
     "akeneo/pim-community-dev": "^7.0.0"
   },
