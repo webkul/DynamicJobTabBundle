@@ -10,20 +10,29 @@ define([
   'pim/common/property',
   'pim/edition',
   'pim/fetcher-registry',
-
 ], function (_, __, template, BaseTab, propertyAccessor, pimEdition, FetcherRegistry) {
   return BaseTab.extend({
     template: _.template(template),
     errors: {},
+    jobInstanceCode: null, // Store job instance code locally
 
     /**
      * {@inherit}
      */
     configure: function () {
-      this.listenTo(this.getRoot(), 'pim_enrich:form:entity:post_fetch', this.resetValidationErrors.bind(this));
-      this.listenTo(this.getRoot(), 'pim_enrich:form:entity:post_fetch', this.render.bind(this));
-      this.listenTo(this.getRoot(), 'pim_enrich:form:entity:validation_error', this.setValidationErrors.bind(this));
-      this.listenTo(this.getRoot(), 'pim_enrich:form:entity:validation_error', this.render.bind(this));
+      // Using arrow functions for listeners automatically binds `this`, making the code cleaner.
+      this.listenTo(this.getRoot(), 'pim_enrich:form:entity:post_fetch', (data) => {
+        // IMPROVEMENT 1: Get data directly from the form model instead of the URL.
+        // This is more reliable and decouples the component from the URL structure.
+        this.jobInstanceCode = data.code || null;
+        this.resetValidationErrors();
+        this.render();
+      });
+
+      this.listenTo(this.getRoot(), 'pim_enrich:form:entity:validation_error', (event) => {
+        this.setValidationErrors(event);
+        this.render();
+      });
 
       return BaseTab.prototype.configure.apply(this, arguments);
     },
@@ -32,52 +41,57 @@ define([
      * {@inherit}
      */
     registerTab: function () {
-        var parent = this.parent.parent ; 
-        FetcherRegistry.getFetcher('job_code_by_instance_code')
-            .fetch(this.getJobInstanceCode(), { cached: true })
-            .then(function (jobCode) {
-                console.log(jobCode)
-                if (-1 !== this.config.whitelistJobs.indexOf(jobCode)) {
-                    this.trigger('tab:register', {
-                      code: this.config.tabCode ? this.config.tabCode : this.code,
-                      label: __(this.config.tabTitle),
-                      isVisible: () => !(this.config.hideForCloudEdition && pimEdition.isCloudEdition()),
-                    });
-                }
-            }.bind(this));
+      // Exit early if the job instance code is not available.
+      if (!this.jobInstanceCode) {
+        return;
+      }
+
+      FetcherRegistry.getFetcher('job_code_by_instance_code')
+        .fetch(this.jobInstanceCode, { cached: true })
+        // IMPROVEMENT 2: Use an arrow function to avoid needing `.bind(this)`.
+        .then((jobCode) => {
+          // Use `includes` for better readability than `indexOf`.
+          if (this.config.whitelistJobs.includes(jobCode)) {
+            this.trigger('tab:register', {
+              code: this.config.tabCode ? this.config.tabCode : this.code,
+              label: __(this.config.tabTitle),
+              // This arrow function for isVisible is already well-written.
+              isVisible: () => !(this.config.hideForCloudEdition && pimEdition.isCloudEdition()),
+            });
+          }
+        });
     },
 
     /**
-     * 
+     * NOTE: The getJobInstanceCode method has been removed.
+     * Relying on `window.location.href` was fragile. If the URL routing ever changed,
+     * the code would break. We now get the code directly from the form's data model
+     * in the `configure` method, which is much safer.
      */
-    getJobInstanceCode: function () {
-        var url = window.location.href;
-        var urlAfterRemoveEdit = (url.substring(0, url.length - 5));
 
-        return urlAfterRemoveEdit.substring(urlAfterRemoveEdit.lastIndexOf('/') + 1);
-
-    },
     /**
      * Set validation errors after save request failure
      *
-     * @param {event} event
+     * @param {object} event
      */
     setValidationErrors: function (event) {
-      this.errors = event.response;
+      this.errors = event.response || {};
     },
 
     /**
-     * Remove validation error
+     * Remove validation errors.
      */
     resetValidationErrors: function () {
-      if (Object.entries(this.errors).length >= 0) {
+      // IMPROVEMENT 3: The original condition `Object.entries(this.errors).length >= 0`
+      // would always be true. This new condition correctly checks if there are any errors.
+      if (Object.keys(this.errors).length > 0) {
         this.getRoot().trigger('pim_enrich:form:form-tabs:remove-errors');
         this.errors = {};
       }
     },
 
     /**
-     * Get the validtion errors for the given field
+     * Get the validation errors for the given field.
      *
      * @param {string} field
      *
@@ -95,9 +109,10 @@ define([
         return this;
       }
 
-      this.$el.html(this.template({__: __}));
-
+      this.$el.html(this.template({ __: __ }));
       this.renderExtensions();
+
+      return this; // It's good practice for render to return `this`.
     },
   });
 });
